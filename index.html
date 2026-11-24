@@ -9,7 +9,6 @@
   --bg-color: #19191a;
   --card-bg: #232325;
   --accent-color: #38bdf8;
-  --accent-hover: #0284c7;
   --text-color: #f8fafc;
   --muted-text: #9ca3af;
   --success-color: #22c55e;
@@ -81,7 +80,6 @@ body {
   border-radius: 8px;
   text-align: center;
   outline: none;
-  transition: border-color 0.2s ease;
 }
 
 .login-input:focus {
@@ -98,15 +96,10 @@ body {
   border: none;
   border-radius: 8px;
   cursor: pointer;
-  transition: background-color 0.2s ease, transform 0.1s ease;
 }
 
 .login-btn:hover {
   background-color: #e5e7eb;
-}
-
-.login-btn:active {
-  transform: scale(0.98);
 }
 
 .login-error {
@@ -167,12 +160,10 @@ p.subtitle {
   padding: 6px 10px;
   font-size: 0.8rem;
   cursor: pointer;
-  transition: color 0.2s ease, border-color 0.2s ease;
 }
 
 .btn-lock:hover {
   color: var(--text-color);
-  border-color: #52525b;
 }
 
 .container {
@@ -202,7 +193,6 @@ p.subtitle {
   justify-content: center;
 }
 
-/* Doble reproductor superpuesto para fundido cruzado */
 .avatar-video {
   position: absolute;
   top: 0;
@@ -290,11 +280,6 @@ input[type="file"] {
   border: 1px solid #424247;
   border-radius: 6px;
   cursor: pointer;
-  transition: background 0.2s ease;
-}
-
-.btn-test:hover {
-  background: #3e3e44;
 }
 
 .controls {
@@ -314,7 +299,6 @@ button.btn-mic {
   background-color: var(--accent-color);
   color: #19191a;
   cursor: pointer;
-  transition: background-color 0.2s ease;
 }
 
 button.btn-mic.listening {
@@ -343,13 +327,250 @@ button.btn-mic.listening {
 </head>
 <body>
 
-<!-- Pantalla de bloqueo -->
 <div id="loginOverlay">
   <div class="login-title">INGRESO CHACAL</div>
   <form class="login-form" id="loginForm">
-    <input
-      type="password"
-      id="passwordInput"
-      class="login-input"
-      placeholder="Contraseña"
-      autocomplete
+    <input type="password" id="passwordInput" class="login-input" placeholder="Contraseña" required>
+    <button type="submit" class="login-btn">Entrar</button>
+    <div class="login-error" id="loginError"></div>
+  </form>
+</div>
+
+<div class="app-wrapper">
+  <header>
+    <h1>WELCOME</h1>
+    <p class="subtitle">Carga 4 videos y controla la acción hablando</p>
+    <button type="button" id="lockBtn" class="btn-lock" title="Bloquear pantalla">🔒 Salir</button>
+  </header>
+
+  <div class="container">
+    <div class="card">
+      <div class="avatar-display">
+        <video id="avatarVideo1" class="avatar-video active" autoplay muted playsinline></video>
+        <video id="avatarVideo2" class="avatar-video" autoplay muted playsinline></video>
+        <div class="badge">
+          <span class="indicator" id="micIndicator"></span>
+          <span id="statusText">Esperando videos...</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="font-size: 1.05rem; margin-bottom: 0.8rem;">1. Selecciona los 4 Videos</h2>
+      <div class="inputs-grid">
+        <div class="input-group">
+          <label for="videoQuieto">Video "Quieto" (Reposo):</label>
+          <input type="file" id="videoQuieto" accept="video/*">
+          <button type="button" class="btn-test" onclick="playVideo('quieto', true)">▶️ Probar Quieto</button>
+        </div>
+        <div class="input-group">
+          <label for="videoDerecha">Video "Derecha":</label>
+          <input type="file" id="videoDerecha" accept="video/*">
+          <button type="button" class="btn-test" onclick="playVideo('derecha', false)">▶️ Probar Derecha</button>
+        </div>
+        <div class="input-group">
+          <label for="videoIzquierda">Video "Izquierda":</label>
+          <input type="file" id="videoIzquierda" accept="video/*">
+          <button type="button" class="btn-test" onclick="playVideo('izquierda', false)">▶️ Probar Izquierda</button>
+        </div>
+        <div class="input-group">
+          <label for="videoSonrie">Video "Sonríe":</label>
+          <input type="file" id="videoSonrie" accept="video/*">
+          <button type="button" class="btn-test" onclick="playVideo('sonrie', false)">▶️ Probar Sonríe</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card controls">
+      <h2 style="font-size: 1.05rem; width: 100%;">2. Control por Voz</h2>
+      <button id="toggleMicBtn" class="btn-mic">🎙️ Activar Micrófono</button>
+      <div class="command-log" id="commandLog">Comando detectado: Ninguno</div>
+    </div>
+
+    <div class="card instructions">
+      <strong>Comandos reconocidos:</strong>
+      <ol>
+        <li><strong>"Quieto"</strong>: Mantiene al avatar en posición de reposo (bucle).</li>
+        <li><strong>"Derecha"</strong>: Ejecuta la acción y se detiene en el último fotograma.</li>
+        <li><strong>"Izquierda"</strong>: Ejecuta la acción y se detiene en el último fotograma.</li>
+        <li><strong>"Sonríe" / "Sonrie"</strong>: Ejecuta la acción y se detiene en el último fotograma.</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<script>
+const CONTRASENA_ACCESO = "PrincesaInalcanzable";
+const loginOverlay = document.getElementById('loginOverlay');
+const loginForm = document.getElementById('loginForm');
+const passwordInput = document.getElementById('passwordInput');
+const loginError = document.getElementById('loginError');
+const lockBtn = document.getElementById('lockBtn');
+
+if (sessionStorage.getItem('chacal_unlocked') === 'true') {
+  loginOverlay.style.display = 'none';
+}
+
+loginForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  if (passwordInput.value === CONTRASENA_ACCESO) {
+    sessionStorage.setItem('chacal_unlocked', 'true');
+    loginError.textContent = '';
+    loginOverlay.classList.add('hidden');
+    setTimeout(() => {
+      loginOverlay.style.display = 'none';
+    }, 350);
+  } else {
+    loginError.textContent = 'Contraseña incorrecta';
+    passwordInput.classList.remove('shake');
+    void passwordInput.offsetWidth;
+    passwordInput.classList.add('shake');
+    passwordInput.value = '';
+    passwordInput.focus();
+  }
+});
+
+lockBtn.addEventListener('click', () => {
+  sessionStorage.removeItem('chacal_unlocked');
+  passwordInput.value = '';
+  loginError.textContent = '';
+  loginOverlay.style.display = 'flex';
+  requestAnimationFrame(() => {
+    loginOverlay.classList.remove('hidden');
+    passwordInput.focus();
+  });
+});
+
+const video1 = document.getElementById('avatarVideo1');
+const video2 = document.getElementById('avatarVideo2');
+const toggleMicBtn = document.getElementById('toggleMicBtn');
+const micIndicator = document.getElementById('micIndicator');
+const statusText = document.getElementById('statusText');
+const commandLog = document.getElementById('commandLog');
+
+let activeVideo = video1;
+let inactiveVideo = video2;
+
+const videoMap = {
+  quieto: null,
+  derecha: null,
+  izquierda: null,
+  sonrie: null
+};
+
+let currentCommand = 'quieto';
+let isListening = false;
+let recognition = null;
+
+document.getElementById('videoQuieto').addEventListener('change', (e) => loadVideo('quieto', e.target.files[0]));
+document.getElementById('videoDerecha').addEventListener('change', (e) => loadVideo('derecha', e.target.files[0]));
+document.getElementById('videoIzquierda').addEventListener('change', (e) => loadVideo('izquierda', e.target.files[0]));
+document.getElementById('videoSonrie').addEventListener('change', (e) => loadVideo('sonrie', e.target.files[0]));
+
+function loadVideo(type, file) {
+  if (!file) return;
+  if (videoMap[type]) URL.revokeObjectURL(videoMap[type]);
+  videoMap[type] = URL.createObjectURL(file);
+  commandLog.textContent = `✅ Video "${type}" cargado correctamente`;
+  if (type === 'quieto' && currentCommand === 'quieto') {
+    playVideo('quieto', true);
+  }
+}
+
+function playVideo(command, isLooping = false) {
+  if (!videoMap[command]) {
+    commandLog.textContent = `⚠️ Primero debes cargar el video para "${command}"`;
+    return;
+  }
+  currentCommand = command;
+  inactiveVideo.src = videoMap[command];
+  inactiveVideo.loop = isLooping;
+  inactiveVideo.muted = true;
+
+  const playPromise = inactiveVideo.play();
+  if (playPromise !== undefined) {
+    playPromise.then(() => {
+      inactiveVideo.classList.add('active');
+      activeVideo.classList.remove('active');
+      const temp = activeVideo;
+      activeVideo = inactiveVideo;
+      inactiveVideo = temp;
+      setTimeout(() => {
+        inactiveVideo.pause();
+      }, 400);
+    }).catch(err => {
+      console.error("Error al reproducir video:", err);
+      commandLog.textContent = `❌ Error al reproducir "${command}"`;
+    });
+  }
+  statusText.textContent = `Estado: ${command.toUpperCase()}`;
+}
+
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (!SpeechRecognition) {
+  commandLog.textContent = "⚠️ Tu navegador no soporta reconocimiento de voz. Usa Google Chrome.";
+  toggleMicBtn.disabled = true;
+} else {
+  recognition = new SpeechRecognition();
+  recognition.lang = 'es-ES';
+  recognition.continuous = true;
+  recognition.interimResults = false;
+
+  recognition.onresult = (event) => {
+    const lastIndex = event.results.length - 1;
+    const transcript = event.results[lastIndex][0].transcript.toLowerCase().trim();
+    commandLog.textContent = `Escuchado: "${transcript}"`;
+
+    if (transcript.includes('derecha')) {
+      playVideo('derecha', false);
+    } else if (transcript.includes('izquierda')) {
+      playVideo('izquierda', false);
+    } else if (transcript.includes('sonríe') || transcript.includes('sonrie') || transcript.includes('sonria')) {
+      playVideo('sonrie', false);
+    } else if (transcript.includes('quieto') || transcript.includes('parado') || transcript.includes('stop')) {
+      playVideo('quieto', true);
+    }
+  };
+
+  recognition.onend = () => {
+    if (isListening) {
+      try { recognition.start(); } catch (e) {}
+    } else {
+      updateMicUI(false);
+    }
+  };
+}
+
+toggleMicBtn.addEventListener('click', () => {
+  if (!recognition) return;
+  if (!isListening) {
+    try {
+      recognition.start();
+      isListening = true;
+      updateMicUI(true);
+    } catch (e) {
+      console.error("Error al iniciar micrófono:", e);
+    }
+  } else {
+    isListening = false;
+    recognition.stop();
+    updateMicUI(false);
+  }
+});
+
+function updateMicUI(listening) {
+  if (listening) {
+    toggleMicBtn.classList.add('listening');
+    toggleMicBtn.textContent = "🔴 Detener Micrófono";
+    micIndicator.classList.add('active');
+    commandLog.textContent = "Escuchando comandos de voz...";
+  } else {
+    toggleMicBtn.classList.remove('listening');
+    toggleMicBtn.textContent = "🎙️ Activar Micrófono";
+    micIndicator.classList.remove('active');
+    commandLog.textContent = "Micrófono desactivado";
+  }
+}
+</script>
+</body>
+</html>
